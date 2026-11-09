@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>카드 짝맞추기</title>
+<style>
+  :root {
+    --bg: #eef1f5; --panel: #ffffff; --text: #1f2933; --muted: #6b7785;
+    --cell: #c9d3df; --cell-hover: #b8c4d3; --open: #f7f9fb; --border: #d5dce4;
+    --accent: #3b6fd8; --good: #2f9e44; --boom: #e5484d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15181d; --panel: #1f242b; --text: #e6e9ee; --muted: #8d97a3;
+      --cell: #3a434f; --cell-hover: #46515f; --open: #262c34; --border: #333b46;
+      --accent: #6b98f0; --good: #55c06a; --boom: #e5484d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 24px 16px;
+  }
+  .home { align-self: flex-start; color: var(--muted); text-decoration: none; font-size: 0.95rem; margin-bottom: 8px; }
+  .home:hover { color: var(--accent); }
+  h1 { margin: 0 0 16px; font-size: 1.6rem; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
+  .controls button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 0.95rem;
+  }
+  .controls button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .game { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; max-width: 100%; }
+  .status {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    margin-bottom: 10px; font-variant-numeric: tabular-nums; font-size: 1.1rem; font-weight: 600;
+  }
+  .status button {
+    font-size: 1.4rem; background: none; border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; width: 44px; height: 44px; cursor: pointer;
+  }
+  .board { display: grid; gap: 8px; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  .card {
+    width: min(72px, calc((100vw - 90px) / var(--cols))); aspect-ratio: 3 / 4;
+    perspective: 600px; border: 0; padding: 0; background: none; cursor: pointer;
+  }
+  .card .inner {
+    position: relative; width: 100%; height: 100%;
+    transition: transform .35s; transform-style: preserve-3d;
+  }
+  .card.up .inner, .card.done .inner { transform: rotateY(180deg); }
+  .card .face {
+    position: absolute; inset: 0; border-radius: 8px; backface-visibility: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card .back { background: var(--cell); font-size: 1.3rem; color: var(--muted); }
+  .card:hover:not(.up):not(.done) .back { background: var(--cell-hover); }
+  .card .front { background: var(--open); border: 2px solid var(--border); transform: rotateY(180deg); font-size: clamp(1.5rem, 6vw, 2.2rem); }
+  .card.done .front { border-color: var(--good); }
+  .card:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+  .message { min-height: 1.5em; margin-top: 10px; font-weight: 600; text-align: center; }
+  .help { color: var(--muted); font-size: 0.9rem; margin-top: 14px; text-align: center; line-height: 1.6; }
+  @media (prefers-reduced-motion: reduce) { .card .inner { transition: none; } }
+</style>
+</head>
+<body>
+  <a class="home" href="index.html">← 게임 모음</a>
+  <h1>🃏 카드 짝맞추기</h1>
+
+  <div class="controls">
+    <button data-level="easy" class="active">쉬움 (6쌍)</button>
+    <button data-level="medium">보통 (8쌍)</button>
+    <button data-level="hard">어려움 (12쌍)</button>
+  </div>
+
+  <div class="game">
+    <div class="status">
+      <span id="tries">시도 0</span>
+      <button id="restart" title="새 게임">🔄</button>
+      <span id="timer">⏱ 0초</span>
+    </div>
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="message" id="message"></div>
+  <div class="help">카드를 두 장씩 뒤집어 같은 그림을 찾으세요.<br>모든 짝을 맞추면 승리 · 시도 횟수가 적을수록 좋은 기록입니다</div>
+
+<script>
+const LEVELS = { easy: { cols: 4, pairs: 6 }, medium: { cols: 4, pairs: 8 }, hard: { cols: 6, pairs: 12 } };
+const ICONS = ['🍎','🍋','🍇','🍉','🍒','🥝','🍑','🍍','🥕','🌽','🍄','🌵','⭐','🌙','⚡','🔥','🎈','🎲'];
+
+const boardEl = document.getElementById('board');
+const triesEl = document.getElementById('tries');
+const timerEl = document.getElementById('timer');
+const msgEl = document.getElementById('message');
+
+let level = 'easy', cards = [], first = null, lock = false, tries = 0, matched = 0;
+let timer = null, seconds = 0, started = false;
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+function newGame() {
+  const { cols, pairs } = LEVELS[level];
+  clearInterval(timer); seconds = 0; started = false;
+  first = null; lock = false; tries = 0; matched = 0;
+  triesEl.textContent = '시도 0'; timerEl.textContent = '⏱ 0초'; msgEl.textContent = '';
+  const icons = shuffle(ICONS.slice()).slice(0, pairs);
+  cards = shuffle([...icons, ...icons]).map(icon => ({ icon, done: false }));
+  boardEl.innerHTML = '';
+  boardEl.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+  boardEl.style.setProperty('--cols', cols);
+  cards.forEach((c, i) => {
+    const el = document.createElement('button');
+    el.className = 'card';
+    el.dataset.i = i;
+    el.setAttribute('aria-label', '뒤집힌 카드');
+    el.innerHTML = `<div class="inner"><div class="face back">?</div><div class="face front">${c.icon}</div></div>`;
+    boardEl.appendChild(el);
+    c.el = el;
+  });
+}
+
+function flip(i) {
+  const c = cards[i];
+  if (lock || c.done || c === first) return;
+  if (!started) {
+    started = true;
+    timer = setInterval(() => { seconds++; timerEl.textContent = `⏱ ${seconds}초`; }, 1000);
+  }
+  c.el.classList.add('up');
+  c.el.setAttribute('aria-label', c.icon);
+  if (!first) { first = c; return; }
+
+  tries++;
+  triesEl.textContent = `시도 ${tries}`;
+  if (first.icon === c.icon) {
+    first.done = c.done = true;
+    first.el.classList.add('done'); c.el.classList.add('done');
+    first = null;
+    matched++;
+    if (matched === cards.length / 2) win();
+  } else {
+    lock = true;
+    const a = first; first = null;
+    setTimeout(() => {
+      a.el.classList.remove('up'); c.el.classList.remove('up');
+      a.el.setAttribute('aria-label', '뒤집힌 카드'); c.el.setAttribute('aria-label', '뒤집힌 카드');
+      lock = false;
+    }, 800);
+  }
+}
+
+function win() {
+  clearInterval(timer);
+  const key = 'memory-best-' + level;
+  let best = null;
+  try { best = Number(localStorage.getItem(key)) || null; } catch (e) {}
+  let msg = `🎉 완성! ${tries}번 시도 · ${seconds}초`;
+  if (!best || tries < best) {
+    try { localStorage.setItem(key, tries); } catch (e) {}
+    msg += ' (최고 기록!)';
+  } else msg += ` · 최고 기록: ${best}번`;
+  msgEl.textContent = msg;
+}
+
+boardEl.addEventListener('click', e => {
+  const el = e.target.closest('.card');
+  if (el) flip(Number(el.dataset.i));
+});
+document.getElementById('restart').addEventListener('click', newGame);
+document.querySelectorAll('[data-level]').forEach(btn => btn.addEventListener('click', () => {
+  level = btn.dataset.level;
+  document.querySelectorAll('[data-level]').forEach(b => b.classList.toggle('active', b === btn));
+  newGame();
+}));
+newGame();
+</script>
+</body>
+</html>

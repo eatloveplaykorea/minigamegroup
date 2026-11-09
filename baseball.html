@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>숫자야구</title>
+<style>
+  :root {
+    --bg: #eef1f5; --panel: #ffffff; --text: #1f2933; --muted: #6b7785;
+    --cell: #c9d3df; --cell-hover: #b8c4d3; --open: #f7f9fb; --border: #d5dce4;
+    --accent: #3b6fd8; --good: #2f9e44; --warn: #c2410c; --boom: #e5484d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15181d; --panel: #1f242b; --text: #e6e9ee; --muted: #8d97a3;
+      --cell: #3a434f; --cell-hover: #46515f; --open: #262c34; --border: #333b46;
+      --accent: #6b98f0; --good: #55c06a; --warn: #f08a4b; --boom: #e5484d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 24px 16px;
+  }
+  .home { align-self: flex-start; color: var(--muted); text-decoration: none; font-size: 0.95rem; margin-bottom: 8px; }
+  .home:hover { color: var(--accent); }
+  h1 { margin: 0 0 16px; font-size: 1.6rem; }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
+  .controls button {
+    border: 1px solid var(--border); background: var(--panel);
+    padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 0.95rem;
+  }
+  .controls button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .game { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; width: 100%; max-width: 380px; }
+  .status {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    margin-bottom: 14px; font-variant-numeric: tabular-nums; font-size: 1.1rem; font-weight: 600;
+  }
+  .status button { font-size: 1.4rem; background: none; border: 1px solid var(--border); border-radius: 8px; width: 44px; height: 44px; cursor: pointer; }
+  .slots { display: flex; justify-content: center; gap: 10px; margin-bottom: 14px; }
+  .slot {
+    width: 56px; height: 64px; border-radius: 10px; background: var(--open); border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .slot.next { border-color: var(--accent); }
+  .pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .pad button {
+    height: 48px; border-radius: 8px; border: 1px solid var(--border); background: var(--cell);
+    font-size: 1.2rem; font-weight: 700; cursor: pointer; touch-action: manipulation;
+  }
+  .pad button:hover:not(:disabled) { background: var(--cell-hover); }
+  .pad button:disabled { opacity: .35; cursor: default; }
+  .pad .wide { grid-column: span 2; }
+  .pad .go { grid-column: span 3; background: var(--accent); color: #fff; border-color: var(--accent); }
+  .log { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-variant-numeric: tabular-nums; }
+  .log li {
+    display: grid; grid-template-columns: 2.2em 1fr auto; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 8px; background: var(--open); border: 1px solid var(--border);
+  }
+  .log .n { color: var(--muted); font-size: 0.85rem; }
+  .log .g { font-size: 1.2rem; font-weight: 700; letter-spacing: .15em; }
+  .log .r { font-weight: 700; }
+  .s { color: var(--good); } .b { color: var(--warn); } .o { color: var(--boom); }
+  .message { min-height: 1.5em; margin-top: 10px; font-weight: 600; text-align: center; }
+  .help { color: var(--muted); font-size: 0.9rem; margin-top: 14px; text-align: center; line-height: 1.6; max-width: 380px; }
+</style>
+</head>
+<body>
+  <a class="home" href="index.html">← 게임 모음</a>
+  <h1>⚾ 숫자야구</h1>
+
+  <div class="controls">
+    <button data-len="3" class="active">3자리 (10회)</button>
+    <button data-len="4">4자리 (12회)</button>
+  </div>
+
+  <div class="game">
+    <div class="status">
+      <span id="left">남은 기회 10</span>
+      <button id="restart" title="새 게임">🔄</button>
+      <span id="best">최고 -</span>
+    </div>
+    <div class="slots" id="slots"></div>
+    <div class="pad" id="pad"></div>
+    <ol class="log" id="log"></ol>
+  </div>
+
+  <div class="message" id="message" role="status"></div>
+  <div class="help">
+    서로 다른 숫자로 된 비밀 수를 맞히세요.<br>
+    <b class="s">S(스트라이크)</b>: 숫자와 자리 모두 맞음 · <b class="b">B(볼)</b>: 숫자만 맞음 · <b class="o">OUT</b>: 하나도 없음<br>
+    키보드: 숫자 입력 · Backspace 지우기 · Enter 확인
+  </div>
+
+<script>
+const slotsEl = document.getElementById('slots');
+const padEl = document.getElementById('pad');
+const logEl = document.getElementById('log');
+const leftEl = document.getElementById('left');
+const bestEl = document.getElementById('best');
+const msgEl = document.getElementById('message');
+
+let len = 3, maxTries = 10, secret = [], input = [], tries = 0, over = false;
+
+function bestKey() { return 'baseball-best-' + len; }
+function readBest() { try { return Number(localStorage.getItem(bestKey())) || null; } catch (e) { return null; } }
+
+function newGame() {
+  maxTries = len === 3 ? 10 : 12;
+  const digits = [0,1,2,3,4,5,6,7,8,9];
+  for (let i = digits.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [digits[i], digits[j]] = [digits[j], digits[i]]; }
+  secret = digits.slice(0, len);
+  input = []; tries = 0; over = false;
+  logEl.innerHTML = ''; msgEl.textContent = '';
+  const best = readBest();
+  bestEl.textContent = '최고 ' + (best ? best + '회' : '-');
+  render();
+}
+
+function render() {
+  slotsEl.innerHTML = '';
+  for (let i = 0; i < len; i++) {
+    const d = document.createElement('div');
+    d.className = 'slot' + (i === input.length && !over ? ' next' : '');
+    d.textContent = input[i] ?? '';
+    slotsEl.appendChild(d);
+  }
+  leftEl.textContent = '남은 기회 ' + (maxTries - tries);
+  padEl.querySelectorAll('[data-d]').forEach(b => {
+    b.disabled = over || input.includes(Number(b.dataset.d)) || input.length >= len;
+  });
+  padEl.querySelector('.go').disabled = over || input.length !== len;
+  padEl.querySelector('.del').disabled = over || !input.length;
+}
+
+function buildPad() {
+  for (let d = 1; d <= 9; d++) padEl.insertAdjacentHTML('beforeend', `<button data-d="${d}">${d}</button>`);
+  padEl.insertAdjacentHTML('beforeend', `<button data-d="0">0</button>`);
+  padEl.insertAdjacentHTML('beforeend', `<button class="del wide" aria-label="지우기">⌫ 지우기</button><button class="go">확인</button>`);
+}
+
+function press(d) {
+  if (over || input.length >= len || input.includes(d)) return;
+  input.push(d); render();
+}
+function del() { if (!over && input.length) { input.pop(); render(); } }
+
+function submit() {
+  if (over || input.length !== len) return;
+  let s = 0, b = 0;
+  input.forEach((d, i) => { if (secret[i] === d) s++; else if (secret.includes(d)) b++; });
+  tries++;
+  const result = s === 0 && b === 0 ? '<span class="o">OUT</span>'
+    : `${s ? `<span class="s">${s}S</span> ` : ''}${b ? `<span class="b">${b}B</span>` : ''}`;
+  logEl.insertAdjacentHTML('afterbegin', `<li><span class="n">${tries}회</span><span class="g">${input.join('')}</span><span class="r">${result}</span></li>`);
+  input = [];
+  if (s === len) {
+    over = true;
+    const best = readBest();
+    let msg = `🎉 정답! ${tries}번 만에 맞혔습니다.`;
+    if (!best || tries < best) {
+      try { localStorage.setItem(bestKey(), tries); } catch (e) {}
+      msg += ' (최고 기록!)';
+      bestEl.textContent = '최고 ' + tries + '회';
+    }
+    msgEl.textContent = msg;
+  } else if (tries >= maxTries) {
+    over = true;
+    msgEl.textContent = `😢 기회를 모두 썼습니다. 정답은 ${secret.join('')}`;
+  }
+  render();
+}
+
+padEl.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  if (b.dataset.d) press(Number(b.dataset.d));
+  else if (b.classList.contains('del')) del();
+  else if (b.classList.contains('go')) submit();
+});
+document.addEventListener('keydown', e => {
+  if (/^[0-9]$/.test(e.key)) press(Number(e.key));
+  else if (e.key === 'Backspace') del();
+  else if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) submit();
+});
+document.getElementById('restart').addEventListener('click', newGame);
+document.querySelectorAll('[data-len]').forEach(btn => btn.addEventListener('click', () => {
+  len = Number(btn.dataset.len);
+  document.querySelectorAll('[data-len]').forEach(b => b.classList.toggle('active', b === btn));
+  newGame();
+}));
+
+buildPad();
+newGame();
+</script>
+</body>
+</html>

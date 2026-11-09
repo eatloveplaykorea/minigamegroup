@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>미니 게임 모음</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+  /* Same grid-paper look as the minesweeper guide; cards are the whole point of the page. */
+  :root {
+    --paper: #f2f5f9; --surface: #ffffff; --ink: #17202b; --muted: #5d6b7b; --line: #d4dce6;
+    --accent: #2f6fde; --red: #d6333b;
+    --puzzle: #2f6fde; --puzzle-bg: #e3ecfc;
+    --action: #c2410c; --action-bg: #fbe9dd;
+    --font-display: "Do Hyeon", "IBM Plex Sans KR", "Malgun Gothic", sans-serif;
+    --font-body: "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #12161c; --surface: #1b2129; --ink: #e5e9ef; --muted: #93a0ae; --line: #2c3540;
+      --accent: #6b9af2; --red: #f0555c;
+      --puzzle: #6b9af2; --puzzle-bg: #1f2b40; --action: #f08a4b; --action-bg: #3a2517;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12161c; --surface: #1b2129; --ink: #e5e9ef; --muted: #93a0ae; --line: #2c3540;
+    --accent: #6b9af2; --red: #f0555c;
+    --puzzle: #6b9af2; --puzzle-bg: #1f2b40; --action: #f08a4b; --action-bg: #3a2517;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); font-family: var(--font-body); line-height: 1.6;
+    background-color: var(--paper);
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 32px 32px; background-attachment: fixed;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+  h1, h2 { font-family: var(--font-display); font-weight: 400; margin: 0; line-height: 1.15; text-wrap: balance; }
+  p { margin: 0; }
+  a { color: inherit; }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .label { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+  header { padding-block: 56px 28px; display: flex; flex-direction: column; gap: 14px; }
+  header h1 { font-size: clamp(2.6rem, 7vw, 4.4rem); }
+  header h1 em { font-style: normal; color: var(--red); }
+  header .lead { font-size: 1.1rem; color: var(--muted); max-width: 44ch; }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font: inherit; font-size: 0.95rem; cursor: pointer; color: var(--ink);
+    padding: 6px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+  }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .count { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); }
+
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding-bottom: 56px; list-style: none; margin: 0; padding-left: 0; }
+  .card {
+    position: relative; display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+  }
+  .card:hover, .card:focus-within { transform: translateY(-3px); border-color: var(--cat); box-shadow: 0 16px 32px -20px rgba(23, 32, 43, .5); }
+  .card[hidden] { display: none; }
+  .card.puzzle { --cat: var(--puzzle); --cat-bg: var(--puzzle-bg); }
+  .card.action { --cat: var(--action); --cat-bg: var(--action-bg); }
+  .thumb {
+    height: 132px; display: flex; align-items: center; justify-content: center;
+    background: var(--cat-bg); font-size: 4rem; border-bottom: 1px solid var(--line);
+  }
+  .body { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .card h2 { font-size: 1.7rem; }
+  .card h2 a { text-decoration: none; }
+  .card h2 a::after { content: ""; position: absolute; inset: 0; } /* whole card clickable */
+  .card h2 a:focus-visible { outline: none; }
+  .card:has(h2 a:focus-visible) { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .desc { color: var(--muted); font-size: 0.95rem; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-size: 0.8rem; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.cat { background: var(--cat-bg); color: var(--cat); border-color: transparent; font-weight: 700; }
+  .foot {
+    margin-top: auto; padding-top: 12px; border-top: 1px dashed var(--line);
+    display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 0.9rem;
+  }
+  .best { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); }
+  .best b { color: var(--ink); }
+  .play { font-family: var(--font-display); font-size: 1.15rem; color: var(--cat); white-space: nowrap; }
+  .sub { position: relative; z-index: 1; font-size: 0.85rem; color: var(--muted); }
+  .sub:hover { color: var(--accent); }
+
+  footer { padding-block: 0 48px; color: var(--muted); font-size: 0.9rem; }
+  footer .wrap > div { border-top: 1px solid var(--line); padding-top: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+
+  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 580px) {
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    header { padding-block: 32px 20px; }
+    .thumb { height: 104px; font-size: 3.2rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { .card { transition: none; } .card:hover, .card:focus-within { transform: none; } }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <span class="label">Mini Games · 설치 없이 바로</span>
+  <h1>잠깐 쉬어갈 때,<br><em>한 판</em> 어때요?</h1>
+  <p class="lead">브라우저에서 바로 즐기는 간단한 게임 다섯 가지. 카드를 눌러 게임을 고르세요. 최고 기록은 이 기기에 저장됩니다.</p>
+</header>
+
+<main class="wrap">
+  <div class="toolbar">
+    <div class="chips" role="group" aria-label="게임 종류 필터">
+      <button class="chip" data-filter="all" aria-pressed="true">전체</button>
+      <button class="chip" data-filter="puzzle" aria-pressed="false">🧩 퍼즐·두뇌</button>
+      <button class="chip" data-filter="action" aria-pressed="false">⚡ 순발력</button>
+    </div>
+    <span class="count" id="count" aria-live="polite">5개 게임</span>
+  </div>
+
+  <ul class="grid" id="grid">
+    <li class="card puzzle" data-cat="puzzle">
+      <div class="thumb" aria-hidden="true">💣</div>
+      <div class="body">
+        <h2><a href="minesweeper.html">지뢰찾기</a></h2>
+        <p class="desc">숫자 힌트로 지뢰 위치를 추리해 안전한 칸을 모두 여세요.</p>
+        <div class="tags"><span class="tag cat">퍼즐</span><span class="tag">3~10분</span><span class="tag">난이도 3단계</span></div>
+        <div class="foot">
+          <span class="best" data-best="minesweeper">기록 없음</span>
+          <a class="sub" href="minesweeper-guide.html">규칙·공략 보기</a>
+        </div>
+      </div>
+    </li>
+    <li class="card puzzle" data-cat="puzzle">
+      <div class="thumb" aria-hidden="true">🃏</div>
+      <div class="body">
+        <h2><a href="memory.html">카드 짝맞추기</a></h2>
+        <p class="desc">카드를 두 장씩 뒤집어 같은 그림을 찾는 기억력 게임.</p>
+        <div class="tags"><span class="tag cat">퍼즐</span><span class="tag">1~3분</span><span class="tag">난이도 3단계</span></div>
+        <div class="foot"><span class="best" data-best="memory">기록 없음</span><span class="play">플레이 →</span></div>
+      </div>
+    </li>
+    <li class="card puzzle" data-cat="puzzle">
+      <div class="thumb" aria-hidden="true">⚾</div>
+      <div class="body">
+        <h2><a href="baseball.html">숫자야구</a></h2>
+        <p class="desc">스트라이크와 볼 힌트만으로 숨겨진 숫자를 맞혀 보세요.</p>
+        <div class="tags"><span class="tag cat">두뇌</span><span class="tag">2~5분</span><span class="tag">3·4자리</span></div>
+        <div class="foot"><span class="best" data-best="baseball">기록 없음</span><span class="play">플레이 →</span></div>
+      </div>
+    </li>
+    <li class="card action" data-cat="action">
+      <div class="thumb" aria-hidden="true">🐍</div>
+      <div class="body">
+        <h2><a href="snake.html">뱀 게임</a></h2>
+        <p class="desc">먹이를 먹을수록 길어지는 뱀. 벽과 내 몸을 피하세요.</p>
+        <div class="tags"><span class="tag cat">순발력</span><span class="tag">1~5분</span><span class="tag">키보드·스와이프</span></div>
+        <div class="foot"><span class="best" data-best="snake">기록 없음</span><span class="play">플레이 →</span></div>
+      </div>
+    </li>
+    <li class="card action" data-cat="action">
+      <div class="thumb" aria-hidden="true">🔨</div>
+      <div class="body">
+        <h2><a href="mole.html">두더지 잡기</a></h2>
+        <p class="desc">30초 동안 튀어나오는 두더지를 최대한 많이 잡으세요.</p>
+        <div class="tags"><span class="tag cat">순발력</span><span class="tag">30초</span><span class="tag">클릭·터치</span></div>
+        <div class="foot"><span class="best" data-best="mole">기록 없음</span><span class="play">플레이 →</span></div>
+      </div>
+    </li>
+  </ul>
+</main>
+
+<footer>
+  <div class="wrap"><div>
+    <span>HTML · CSS · JavaScript만 사용 · 게임마다 파일 하나</span>
+    <span>다크 모드 자동 지원</span>
+  </div></div>
+</footer>
+
+<script>
+function get(key) { try { return Number(localStorage.getItem(key)) || null; } catch (e) { return null; } }
+
+// Each game stores its own best score; show the most useful one per card.
+const BEST = {
+  minesweeper: () => [['초급', 'easy'], ['중급', 'medium'], ['고급', 'hard']]
+    .map(([n, k]) => [n, get('ms-best-' + k)]).filter(x => x[1]).map(([n, v]) => `${n} <b>${v}초</b>`),
+  memory: () => [['쉬움', 'easy'], ['보통', 'medium'], ['어려움', 'hard']]
+    .map(([n, k]) => [n, get('memory-best-' + k)]).filter(x => x[1]).map(([n, v]) => `${n} <b>${v}회</b>`),
+  baseball: () => [['3자리', 3], ['4자리', 4]]
+    .map(([n, k]) => [n, get('baseball-best-' + k)]).filter(x => x[1]).map(([n, v]) => `${n} <b>${v}회</b>`),
+  snake: () => get('snake-best') ? [`최고 <b>${get('snake-best')}점</b>`] : [],
+  mole: () => get('mole-best') ? [`최고 <b>${get('mole-best')}점</b>`] : [],
+};
+
+function renderBest() {
+  document.querySelectorAll('[data-best]').forEach(el => {
+    const parts = BEST[el.dataset.best]();
+    el.innerHTML = parts.length ? '🏆 ' + parts.slice(0, 2).join(' · ') : '기록 없음';
+  });
+}
+renderBest();
+window.addEventListener('pageshow', renderBest); // refresh after coming back with the browser Back button
+
+const cards = [...document.querySelectorAll('.card')];
+const countEl = document.getElementById('count');
+document.querySelectorAll('.chip').forEach(chip => chip.addEventListener('click', () => {
+  const f = chip.dataset.filter;
+  document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === chip));
+  let n = 0;
+  cards.forEach(card => { const show = f === 'all' || card.dataset.cat === f; card.hidden = !show; if (show) n++; });
+  countEl.textContent = `${n}개 게임`;
+}));
+</script>
+</body>
+</html>
