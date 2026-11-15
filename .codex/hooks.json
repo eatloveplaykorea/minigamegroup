@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash 'C:\\Users\\User\\Desktop\\claude\\.codex\\hooks\\auto-commit.sh'",
+            "timeout": 60,
+            "statusMessage": "변경사항 자동 커밋 중..."
+          }
+        ]
+      }
+    ]
+  }
+}
